@@ -10,6 +10,8 @@ const hudScore = document.getElementById('hud-score');
 const hudComboDots = document.getElementById('hud-combo-dots');
 
 const btnStart = document.getElementById('btn-start');
+const btnStartSpinner = document.getElementById('btn-start-spinner');
+const btnStartText = document.getElementById('btn-start-text');
 const btnRestart = document.getElementById('btn-restart');
 const btnSoundToggle = document.getElementById('btn-sound-toggle');
 const iconSound = document.getElementById('icon-sound');
@@ -212,13 +214,31 @@ const classifier = new TeachableClassifier({
   }
 });
 
+function enableStartButton() {
+  if (!btnStart) return;
+  btnStart.disabled = false;
+  btnStart.className = "w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 text-white font-bold text-base tracking-wide hover:opacity-95 shadow-lg shadow-purple-600/30 transition-all transform active:scale-98 cursor-pointer flex items-center justify-center gap-2";
+  if (btnStartSpinner) btnStartSpinner.classList.add('hidden');
+  if (btnStartText) btnStartText.innerText = "Awaken & Start Game (45s)";
+}
+
 // Setup Classifier & Webcam (Streaming to both modal preview and PIP monitor)
 async function initAI() {
   try {
+    // 1. Wait for Model to finish downloading and loading into memory
     await classifier.load();
+    
+    // 2. Model is now ready! Enable Start Button
+    enableStartButton();
+
+    // 3. Mount webcam feeds
     await classifier.setupWebcam([webcamContainer, modalWebcamMount], 220, 220, true);
   } catch (err) {
     console.warn("AI Init Notice:", err.message);
+    // Even if camera is denied or offline, allow playing with spacebar
+    enableStartButton();
+    if (btnStartText) btnStartText.innerText = "Start Game (Spacebar Mode)";
+    
     const placeholder = document.getElementById('camera-placeholder');
     if (placeholder) {
       placeholder.innerHTML = `
@@ -239,6 +259,7 @@ async function initAI() {
 
 // Start button
 btnStart.addEventListener('click', () => {
+  if (btnStart.disabled) return;
   sound.init();
   startModal.classList.add('hidden');
   game.start();

@@ -243,9 +243,10 @@
           </div>
         </div>
 
-        <!-- Start Button -->
-        <button id="btn-start" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 text-white font-bold text-base tracking-wide hover:opacity-95 shadow-lg shadow-purple-600/30 transition-all transform active:scale-98">
-          Awaken & Start Game (45s)
+        <!-- Start Button (Disabled until model is loaded) -->
+        <button id="btn-start" disabled class="w-full py-3.5 rounded-2xl bg-slate-800 text-slate-400 font-bold text-base tracking-wide border border-white/5 cursor-not-allowed transition-all flex items-center justify-center gap-2">
+          <div id="btn-start-spinner" class="animate-spin w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full"></div>
+          <span id="btn-start-text">Loading AI Model...</span>
         </button>
 
         <p class="text-[11px] text-slate-500 mt-3">
