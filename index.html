@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>dola.ai — AI Gesture Dark Fantasy</title>
+    <!-- Google Fonts & Tailwind styling -->
+    <link rel="stylesheet" href="/src/style.css" />
+    <!-- TensorFlow.js and Teachable Machine libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  </head>
+  <body class="bg-[#050608] text-slate-100 min-h-screen relative overflow-hidden select-none font-sans">
+    
+    <!-- Game Canvas -->
+    <canvas id="game-canvas" class="absolute inset-0 w-full h-full block"></canvas>
+
+    <!-- Top HUD / Claude Minimalist Bar -->
+    <header class="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-6 px-6 py-2.5 rounded-2xl claude-card border border-white/10 shadow-2xl backdrop-blur-xl">
+      <!-- Logo / Title -->
+      <div class="flex items-center gap-2 pr-4 border-r border-white/10">
+        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#00dfd8] animate-pulse"></span>
+        <h1 class="font-cinzel text-lg tracking-wider font-bold text-white">dola<span class="text-purple-400">.ai</span></h1>
+      </div>
+
+      <!-- Time Left (45s) -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs uppercase font-medium text-slate-400 tracking-wider">Time</span>
+        <span id="hud-time" class="font-mono text-xl font-bold text-cyan-300">45<span class="text-xs text-slate-400 font-normal">s</span></span>
+      </div>
+
+      <!-- Score -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs uppercase font-medium text-slate-400 tracking-wider">Score</span>
+        <span id="hud-score" class="font-mono text-2xl font-black text-white glow-cyan">0</span>
+      </div>
+
+      <!-- Workout Combo -->
+      <div class="flex items-center gap-2 pl-4 border-l border-white/10">
+        <span class="text-xs uppercase font-medium text-slate-400 tracking-wider">Combo Bonus</span>
+        <div id="hud-combo-dots" class="flex gap-1.5 items-center">
+          <span class="w-2 h-2 rounded-full bg-slate-700 transition-colors"></span>
+          <span class="w-2 h-2 rounded-full bg-slate-700 transition-colors"></span>
+          <span class="w-2 h-2 rounded-full bg-slate-700 transition-colors"></span>
+          <span class="w-2 h-2 rounded-full bg-slate-700 transition-colors"></span>
+          <span class="w-2 h-2 rounded-full bg-slate-700 transition-colors"></span>
+        </div>
+        <span class="text-xs font-semibold text-amber-400 ml-1">+5</span>
+      </div>
+    </header>
+
+    <!-- Top Right Controls (Audio, Fullscreen, Model Status) -->
+    <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
+      <button id="btn-sound-toggle" class="p-2.5 rounded-xl claude-button text-slate-300 hover:text-white" title="Toggle Sound">
+        <svg id="icon-sound" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+        </svg>
+      </button>
+      <div id="ai-status-pill" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl claude-card text-xs text-slate-300 border border-white/10">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+        <span id="ai-status-text">Connecting AI...</span>
+      </div>
+    </div>
+
+    <!-- AI Webcam PIP Monitor (Bottom Right) -->
+    <div class="absolute bottom-4 right-4 z-20 w-64 claude-card rounded-2xl p-3 border border-white/10 shadow-2xl backdrop-blur-md">
+      <div class="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+        <div class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-300">Gesture Vision</span>
+        </div>
+        <span id="gesture-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-white/5 uppercase">
+          empty
+        </span>
+      </div>
+
+      <!-- Live Webcam Feed Container -->
+      <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-black/60 border border-white/5 flex items-center justify-center">
+        <div id="webcam-container" class="w-full h-full flex items-center justify-center [&>canvas]:w-full [&>canvas]:h-full [&>canvas]:object-cover">
+          <div id="camera-placeholder" class="text-center p-4">
+            <div class="animate-spin w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full mx-auto mb-2"></div>
+            <p class="text-xs text-slate-400">Requesting camera access...</p>
+          </div>
+        </div>
+
+        <!-- Jump Trigger Overlay Flash -->
+        <div id="jump-indicator" class="absolute inset-0 border-2 border-cyan-400 bg-cyan-500/10 opacity-0 pointer-events-none transition-opacity duration-150 flex items-center justify-center">
+          <span class="text-xs font-black tracking-widest text-cyan-300 bg-black/70 px-2 py-1 rounded-md">JUMP TRIGGERED!</span>
+        </div>
+      </div>
+
+      <!-- Real-time Confidence Bars -->
+      <div class="mt-2.5 space-y-1.5 text-xs">
+        <!-- Fan Class -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-0.5">
+            <span class="text-slate-300 font-medium">Fan (Jump ≥90%)</span>
+            <span id="fan-prob" class="font-mono text-cyan-400 font-semibold">0%</span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="fan-bar" class="h-full bg-cyan-400 rounded-full transition-all duration-75 w-0"></div>
+          </div>
+        </div>
+
+        <!-- Empty Class -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-0.5">
+            <span class="text-slate-400">empty (Idle)</span>
+            <span id="empty-prob" class="font-mono text-slate-400">0%</span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="empty-bar" class="h-full bg-slate-600 rounded-full transition-all duration-75 w-0"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-2 pt-2 border-t border-white/5 flex justify-between items-center text-[10px] text-slate-400">
+        <span>Press <kbd class="px-1 py-0.5 bg-slate-800 rounded border border-white/10 text-slate-300">Space</kbd> as backup</span>
+        <span class="text-slate-500">v1.0</span>
+      </div>
+    </div>
+
+    <!-- START GAME OVERLAY MODAL -->
+    <div id="start-modal" class="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+      <div class="claude-card max-w-lg w-full rounded-3xl p-8 border border-purple-500/20 shadow-2xl relative text-center">
+        <!-- Glow accents -->
+        <div class="w-36 h-36 bg-purple-600/20 rounded-full blur-3xl absolute -top-10 -left-10 pointer-events-none"></div>
+        <div class="w-36 h-36 bg-cyan-600/20 rounded-full blur-3xl absolute -bottom-10 -right-10 pointer-events-none"></div>
+
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-950/60 border border-purple-500/30 text-purple-300 text-xs font-medium mb-3">
+          <span>⚔️</span> Anime Deep Dark Fantasy AI Runner
+        </div>
+
+        <h2 class="font-cinzel text-4xl sm:text-5xl font-extrabold text-white tracking-wider mb-2">
+          dola<span class="text-cyan-400">.ai</span>
+        </h2>
+        <p class="text-slate-400 text-sm mb-6 max-w-sm mx-auto">
+          Control your anime hero through the abyssal realm using real-time webcam gesture classification.
+        </p>
+
+        <!-- Rules & Gesture Cards -->
+        <div class="grid grid-cols-2 gap-3 text-left mb-6">
+          <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5">
+            <div class="flex items-center gap-2 text-cyan-300 font-semibold text-xs mb-1">
+              <span class="p-1 rounded bg-cyan-500/20">🪭</span> Class "Fan" (Jump)
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              Raise/wave fan or gesture. Triggers jump when <span class="text-cyan-300 font-bold">Confidence ≥ 90%</span>.
+            </p>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5">
+            <div class="flex items-center gap-2 text-purple-300 font-semibold text-xs mb-1">
+              <span class="p-1 rounded bg-purple-500/20">🧘</span> Class "empty" (Run)
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              Remain still or normal posture. Character runs on ground safely.
+            </p>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 col-span-2">
+            <div class="text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+              <span>Scoring Rules & Objectives</span>
+              <span class="text-amber-400 font-mono">45s Round</span>
+            </div>
+            <div class="flex justify-around text-center text-xs py-1">
+              <div>
+                <span class="font-bold text-cyan-400 block text-base">+1</span>
+                <span class="text-[10px] text-slate-400">Soul Orb</span>
+              </div>
+              <div class="w-px bg-white/10"></div>
+              <div>
+                <span class="font-bold text-rose-400 block text-base">-1</span>
+                <span class="text-[10px] text-slate-400">Dark Spikes</span>
+              </div>
+              <div class="w-px bg-white/10"></div>
+              <div>
+                <span class="font-bold text-amber-400 block text-base">+5</span>
+                <span class="text-[10px] text-slate-400">5x Fan Workout</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Webcam Preview & Calibration Before Starting -->
+        <div class="mb-6 p-4 rounded-2xl bg-black/40 border border-white/10 text-left">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider">Live Camera & Gesture Calibration</span>
+            </div>
+            <span id="modal-test-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-white/10 uppercase">
+              Standby
+            </span>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-4 items-center">
+            <!-- Camera Video Feed Box -->
+            <div class="relative w-36 h-36 rounded-xl overflow-hidden bg-black/80 border border-cyan-500/30 shrink-0 shadow-lg shadow-cyan-950/40 flex items-center justify-center">
+              <div id="modal-webcam-mount" class="w-full h-full flex items-center justify-center [&>canvas]:w-full [&>canvas]:h-full [&>canvas]:object-cover">
+                <!-- Fallback spinner if not yet streamed -->
+                <div class="text-center p-2">
+                  <div class="animate-spin w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full mx-auto mb-1"></div>
+                  <span class="text-[10px] text-slate-400">Loading Cam...</span>
+                </div>
+              </div>
+              <div id="modal-jump-flash" class="absolute inset-0 bg-cyan-400/20 border-2 border-cyan-400 opacity-0 pointer-events-none transition-opacity duration-150 flex items-center justify-center">
+                <span class="text-[10px] font-black text-cyan-300 bg-black/80 px-1.5 py-0.5 rounded">JUMP READY!</span>
+              </div>
+            </div>
+
+            <!-- Gesture Test Gauge -->
+            <div class="flex-1 w-full space-y-2 text-xs">
+              <div>
+                <div class="flex justify-between text-[11px] mb-1">
+                  <span class="text-cyan-300 font-semibold flex items-center gap-1">
+                    <span>🪭 Fan (Jump ≥90%)</span>
+                  </span>
+                  <span id="modal-fan-prob" class="font-mono text-cyan-300 font-bold">0%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden border border-white/5">
+                  <div id="modal-fan-bar" class="h-full bg-cyan-400 rounded-full transition-all duration-75 w-0"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-[11px] mb-1">
+                  <span class="text-slate-400">🧘 empty (Idle / Ground)</span>
+                  <span id="modal-empty-prob" class="font-mono text-slate-400">0%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden border border-white/5">
+                  <div id="modal-empty-bar" class="h-full bg-slate-600 rounded-full transition-all duration-75 w-0"></div>
+                </div>
+              </div>
+
+              <div id="modal-feedback-hint" class="text-[11px] text-amber-300/90 pt-1 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span>Try lifting your fan now to test the 90% threshold!</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Start Button -->
+        <button id="btn-start" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 text-white font-bold text-base tracking-wide hover:opacity-95 shadow-lg shadow-purple-600/30 transition-all transform active:scale-98">
+          Awaken & Start Game (45s)
+        </button>
+
+        <p class="text-[11px] text-slate-500 mt-3">
+          Model: <span class="font-mono text-slate-400">teachablemachine.../pKC77Dyty/</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- GAME OVER SUMMARY MODAL -->
+    <div id="gameover-modal" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-lg p-4">
+      <div class="claude-card max-w-md w-full rounded-3xl p-8 border border-white/10 shadow-2xl relative text-center">
+        <!-- Big Rank / Title -->
+        <span class="text-xs uppercase font-semibold text-slate-400 tracking-widest">Ritual Concluded</span>
+        <h2 class="font-cinzel text-3xl font-extrabold text-white mt-1 mb-3">Abyssal Trial Ended</h2>
+
+        <!-- Grade Badge -->
+        <div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-900/80 to-cyan-900/60 border border-cyan-400/40 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <span id="summary-rank" class="font-cinzel text-4xl font-black text-white glow-cyan">S</span>
+        </div>
+
+        <!-- Final Score Display -->
+        <div class="mb-5">
+          <span class="text-xs text-slate-400 uppercase tracking-wider">Final Score</span>
+          <div id="summary-score" class="font-mono text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
+            0
+          </div>
+          <p id="summary-eval" class="text-xs text-cyan-300 mt-1">Transcendent Shadow Monarch</p>
+        </div>
+
+        <!-- Detailed Breakdown Stats -->
+        <div class="grid grid-cols-2 gap-2 text-left mb-6 text-xs">
+          <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between">
+            <span class="text-slate-400">✨ Souls Collected:</span>
+            <span id="stat-collected" class="font-mono font-bold text-cyan-300">0</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between">
+            <span class="text-slate-400">⚡ Dark Spikes Hit:</span>
+            <span id="stat-hits" class="font-mono font-bold text-rose-400">0</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between">
+            <span class="text-slate-400">🪭 Gesture Jumps:</span>
+            <span id="stat-jumps" class="font-mono font-bold text-purple-300">0</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between">
+            <span class="text-slate-400">🏆 Workout Combos:</span>
+            <span id="stat-bonuses" class="font-mono font-bold text-amber-400">0</span>
+          </div>
+        </div>
+
+        <!-- Restart Button -->
+        <button id="btn-restart" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 text-white font-bold text-base tracking-wide hover:opacity-95 shadow-lg shadow-cyan-500/25 transition-all transform active:scale-98">
+          Play Again (Restart)
+        </button>
+      </div>
+    </div>
+
+    <!-- Floating Combo Notification Banner -->
+    <div id="combo-banner" class="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none opacity-0 -translate-y-4 transition-all duration-300">
+      <div class="px-5 py-2 rounded-2xl bg-gradient-to-r from-amber-500/90 to-purple-600/90 border border-amber-300/40 shadow-xl backdrop-blur-md flex items-center gap-2">
+        <span class="text-xl">✨</span>
+        <span id="combo-banner-text" class="text-xs sm:text-sm font-bold tracking-wide text-white font-cinzel">5x Workout Sequence Complete! +5</span>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
